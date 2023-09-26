@@ -4,9 +4,17 @@ dotEnv.config();
 const dbConnect = require('./dbConnect');
 const User = require('./user');
 const bcrypt = require('bcrypt');
+const expressSession = require('express-session');
 PORT = process.env.PORT || 7658;
+const APP_SECRET = process.env.APP_SECRET;
 
 const app = express();
+app.use(expressSession({
+    secret: APP_SECRET,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {}
+}))
 
 app.use(express.urlencoded({extended: false}));
 
@@ -38,15 +46,30 @@ app.post('/login', async(req, res)=>{
     const correctPassword = result.password;
     const isCorrectPassowrd = await bcrypt.compare(password, correctPassword);
     if (!isCorrectPassowrd){
-        return res.status(404).json({message: "Invalid credential"});
+        return res.status(404).json({message: "Invalid credentials"});
     }else{
+        req.session.user = result.id;
         return res.status(201).json({message: "Login successfully"});
     }
     
 });
 
-app.get('/home-page', (req, res)=>{
-    res.send("I am the home page");
+const isUserAuthenticated = (req, res, next)=>{
+    if (req.session.user){
+        return next();
+    }
+    res.status(401).json({message: "Kindly login to proceed"});
+}
+
+app.get('/home-page', isUserAuthenticated, async(req, res)=>{
+    try {
+        const userId = req.session.user;
+        const userInfo = await User.findOne({where: {id:userId}});
+        res.send(`Welcome ${userInfo.userName}`)
+    } catch (error) {
+        res.send('Unable to handle request')
+    }
+    
 })
 
 
